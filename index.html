@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>A-Level PE — Programme</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" />
+<style>html,body{margin:0;background:#EEF1F2;}</style>
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect } = React;
+
+/* browser storage so it persists on any device, no backend needed */
+if (!window.storage) {
+  window.storage = {
+    get: async (k) => { const v = localStorage.getItem(k); if (v === null) throw new Error("nf"); return { key: k, value: v }; },
+    set: async (k, v) => { localStorage.setItem(k, v); return { key: k, value: v }; },
+  };
+}
+
+const KEY = "pe-app-v3";
+const PINK = { hi: "#FBD0E0", sol: "#CF5E8C", txt: "#B0396A" };
+const BLUE = { hi: "#CBE3F5", sol: "#4E8FC0", txt: "#2E6C9E" };
+const YEL  = { hi: "#FBEDB0", sol: "#D6A82A", txt: "#9A7A16" };
+const GREEN = "#1C8C63", AMBER = "#C58A1E", RED = "#C0463E", INK = "#172029";
+const st = (v) => (v >= 73 ? GREEN : v >= 60 ? AMBER : RED);
+const clamp = (v) => Math.max(20, Math.min(96, Math.round(v)));
+const LVL = { L1: 28, L2: 48, L3: 64, L4: 86 };
+const LEVELS = [{ l: "L4", m: "13–15" }, { l: "L3", m: "9–12" }, { l: "L2", m: "5–8" }, { l: "L1", m: "1–4" }];
+const W = { high: 0.6, ownLevel: 0.4, ownMark: 0.3 };
+const blend = (old, val, w) => clamp(old * (1 - w) + val * w);
+
+const AREAS = [
+  { key: "anat", name: "Anatomy & physiology" }, { key: "skill", name: "Skill acquisition" },
+  { key: "soc1", name: "Sport & society" }, { key: "exphys", name: "Exercise physiology" },
+  { key: "biomech", name: "Biomechanics" }, { key: "psych", name: "Sport psychology" },
+  { key: "tech", name: "Society & technology" },
+];
+const areaName = (k) => (AREAS.find((a) => a.key === k) || {}).name || k;
+const BASE = { anat: [84, 71, 55], skill: [88, 79, 62], soc1: [80, 66, 58], exphys: [74, 64, 50], biomech: [62, 55, 40], psych: [90, 74, 57], tech: [78, 64, 52] };
+const mk = (d) => { const o = {}; for (const k in BASE) o[k] = BASE[k].map((v) => clamp(v + d)); return o; };
+
+const SEED = {
+  focus: "AL-13-CR",
+  students: [
+    { code: "AL-13-CR", name: "C.R.", target: "A*", areas: mk(0),
+      marks: [{ id: "h1", area: "psych", q: "Mock Paper 2 · Sport psychology", predicted: "L2", awarded: null, bal: { p: 50, b: 32, y: 18 }, reflection: "" }] },
+    { code: "AL-13-JK", name: "J.K.", target: "B", areas: mk(-16),
+      marks: [{ id: "h2", area: "biomech", q: "Mock Paper 2 · Biomechanics", predicted: "L1", awarded: null, bal: { p: 60, b: 26, y: 14 }, reflection: "" }] },
+    { code: "AL-13-EW", name: "E.W.", target: "A", areas: mk(-6), marks: [] },
+    { code: "AL-13-AO", name: "A.O.", target: "A*", areas: mk(8), marks: [] },
+  ],
+  own: [],
+  ai: [
+    { code: "AL-13-CR", piece: "Arousal · consolidation", res: "AO1 79%" },
+    { code: "AL-13-EW", piece: "Skill acq · practice 8-marker", res: "L3" },
+    { code: "AL-13-JK", piece: "Energy systems · quiz", res: "AO1 61%" },
+  ],
+};
+
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+const areaPct = (a) => Math.round(mean(a));
+const overall = (s) => Math.round(mean(AREAS.map((a) => areaPct(s.areas[a.key]))));
+const aoOverall = (s, i) => Math.round(mean(AREAS.map((a) => s.areas[a.key][i])));
+
+async function load() { try { const r = await window.storage.get(KEY); return r ? JSON.parse(r.value) : null; } catch { return null; } }
+async function persist(s) { try { await window.storage.set(KEY, JSON.stringify(s)); } catch {} }
+
+function Ring({ pct, size = 66, stroke = 7, color, sub }) {
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r, off = c * (1 - pct / 100);
+  return (
+    <div className="ring" style={{ width: size, height: size }}>
+      <svg width={size} height={size}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#EAEEF0" strokeWidth={stroke} />
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color || st(pct)} strokeWidth={stroke}
+          strokeDasharray={c} strokeDashoffset={off} strokeLinecap="round" style={{ transition: "stroke-dashoffset .6s" }}
+          transform={"rotate(-90 " + (size/2) + " " + (size/2) + ")"} />
+      </svg>
+      <div className="ring-c"><span className="ring-v">{pct}</span>{sub && <span className="ring-s">{sub}</span>}</div>
+    </div>
+  );
+}
+
+function App() {
+  const [s, setS] = useState(null);
+  const [tab, setTab] = useState("me");
+  const [reveal, setReveal] = useState(false);
+  const [flash, setFlash] = useState(false);
+  const [markOpen, setMarkOpen] = useState(null);
+  const [pick, setPick] = useState(null);
+  const [refl, setRefl] = useState("");
+  const [oStu, setOStu] = useState("AL-13-CR");
+  const [oArea, setOArea] = useState("exphys");
+  const [oName, setOName] = useState("");
+  const [oMode, setOMode] = useState("level");
+  const [oLevel, setOLevel] = useState(null);
+  const [oMark, setOMark] = useState(""); const [oOut, setOOut] = useState("15");
+
+  useEffect(() => {
+    (async () => { let x = await load(); if (!x) { x = SEED; persist(x); } setS(x); })();
+  }, []);
+
+  const commit = (n) => { setS(n); persist(n); setFlash(true); setTimeout(() => setFlash(false), 1300); };
+  if (!s) return <div className="loading">Loading…</div>;
+
+  const focus = s.students.find((x) => x.code === s.focus);
+  const pending = s.students.flatMap((x) => x.marks.filter((m) => !m.awarded).map((m) => ({ ...m, code: x.code, name: x.name })));
+
+  const award = () => {
+    const n = clone(s);
+    const stu = n.students.find((x) => x.code === markOpen.code);
+    const m = stu.marks.find((mm) => mm.id === markOpen.id);
+    m.awarded = pick;
+    const a = stu.areas[m.area]; a[2] = blend(a[2], LVL[pick], W.high);
+    commit(n); setMarkOpen(null); setPick(null);
+  };
+  const saveOwn = () => {
+    if (!oName.trim() || (oMode === "level" ? !oLevel : oMark === "")) return;
+    const n = clone(s);
+    const stu = n.students.find((x) => x.code === oStu);
+    const a = stu.areas[oArea];
+    if (oMode === "level") { a[2] = blend(a[2], LVL[oLevel], W.ownLevel); }
+    else { const pct = clamp((+oMark / +oOut) * 100); a[0] = blend(a[0], pct, W.ownMark); a[1] = blend(a[1], pct, W.ownMark); a[2] = blend(a[2], pct, W.ownMark); }
+    n.own.unshift({ code: oStu, area: oArea, name: oName.trim(), score: oMode === "level" ? oLevel : (oMark + "/" + oOut) });
+    commit(n); setOName(""); setOLevel(null); setOMark("");
+  };
+  const saveRefl = (id) => {
+    const n = clone(s); const stu = n.students.find((x) => x.code === n.focus);
+    stu.marks.find((m) => m.id === id).reflection = refl; commit(n); setRefl("");
+  };
+
+  return (
+    <div className="cp-root">
+      <style>{CSS}</style>
+      <div className="topbar">
+        <span className="crest">Elizabeth College</span><span className="dot" /><span>A-Level PE</span>
+        <span className="spacer" />{flash && <span className="saved">Saved ✓</span>}
+        <div className="roles">
+          {[["me","Me"],["class","Class"],["mark","Mark"]].map(([k,l])=>(<button key={k} className={tab===k?"on":""} onClick={()=>setTab(k)}>{l}</button>))}
+        </div>
+      </div>
+
+      {tab==="me" && (<React.Fragment>
+        <section className="hero">
+          <div className="hh-name">{focus.name}</div>
+          <div className="hh-line">Tracking to <strong className="star">{focus.target}</strong> · overall {overall(focus)}%</div>
+          <div className="gradebar"><div className="gb-track"><div className="gb-fill" style={{width: overall(focus) + "%"}} /></div></div>
+        </section>
+        <section className="card">
+          <div className="card-h">Your three objectives</div>
+          {[["AO1","Knowledge",PINK],["AO2","Application",BLUE],["AO3","Evaluation",YEL]].map(([k,lab,c],i)=>(
+            <div className="aob" key={k}>
+              <span className="aob-tag" style={{background:c.hi,color:c.txt}}>{k}</span>
+              <span className="aob-lab">{lab}</span>
+              <div className="aob-bar"><div style={{width: aoOverall(focus,i) + "%",background:c.sol,transition:"width .6s"}} /></div>
+              <span className="aob-v">{aoOverall(focus,i)}</span>
+            </div>
+          ))}
+        </section>
+        {focus.marks.map((m)=>(
+          <section className="card" key={m.id}>
+            <div className="card-h">{m.q}</div>
+            {!m.awarded ? <div className="await">You predicted <strong>{m.predicted}</strong> — awaiting your teacher’s mark.</div> : (<React.Fragment>
+              <div className="mk-row"><span>You predicted</span><strong>{m.predicted}</strong></div>
+              <div className="mk-row hi"><span>Marked by teacher</span><strong>{m.awarded}</strong></div>
+              {m.reflection ? <div className="refl-done"><strong>Your reflection:</strong> {m.reflection}</div> : (
+                <div className="refl"><p>What will you change to get more yellow next time?</p>
+                  <textarea rows={2} placeholder="Next time I will…" value={refl} onChange={(e)=>setRefl(e.target.value)} />
+                  <button onClick={()=>saveRefl(m.id)} disabled={!refl.trim()}>Save reflection</button></div>
+              )}
+            </React.Fragment>)}
+          </section>
+        ))}
+        <section className="card">
+          <div className="card-h">Your seven areas</div>
+          <div className="area-grid">{AREAS.map((a)=>(<div className="area" key={a.key}><Ring pct={areaPct(focus.areas[a.key])} sub="%" /><div className="area-name">{a.name}</div></div>))}</div>
+        </section>
+      </React.Fragment>)}
+
+      {tab==="class" && (<React.Fragment>
+        <section className="cls">
+          <div className="cls-item"><Ring pct={Math.round(mean(s.students.map(overall)))} size={72} stroke={8} sub="avg" /><span className="cls-l">class</span></div>
+          <div className="cls-stats">
+            <div className="cls-s"><strong>{s.students.filter(x=>overall(x)<70).length}</strong><span>below target</span></div>
+            <div className="cls-s"><strong style={{color:YEL.txt}}>AO3</strong><span>ceiling</span></div>
+            <div className="cls-s"><strong>{pending.length}</strong><span>to mark</span></div>
+          </div>
+        </section>
+        <div className="reveal-bar"><span>sorted by who needs you first</span>
+          <button className={"reveal " + (reveal?"on":"")} onClick={()=>setReveal(!reveal)}>{reveal?"Hide initials":"Reveal initials"}</button></div>
+        <section className="card">
+          {s.students.slice().sort((a,b)=>overall(a)-overall(b)).map((x)=>(
+            <div className="crow" key={x.code}><Ring pct={overall(x)} size={54} stroke={6} sub="%" />
+              <div className="crow-b"><div className="crow-id">{reveal?x.name:x.code}</div><div className="crow-sub">target {x.target} · AO3 {aoOverall(x,2)}</div></div>
+              <span className="crow-state" style={{background:st(overall(x))}} /></div>
+          ))}
+        </section>
+      </React.Fragment>)}
+
+      {tab==="mark" && (<React.Fragment>
+        <section className="lane"><div className="lane-h"><span className="lane-tag" style={{background:YEL.hi,color:YEL.txt}}>Ongoing · AI</span><span className="lane-w">auto · no staff time</span></div>
+          {s.ai.map((a,i)=>(<div className="stream" key={i}><span className="s-code">{a.code}</span><span className="s-piece">{a.piece}</span><span className="s-res">{a.res}</span></div>))}
+        </section>
+
+        <section className="lane"><div className="lane-h"><span className="lane-tag" style={{background:INK,color:"#fff"}}>High-stakes · You</span><span className="lane-w">anchors the grade</span></div>
+          {pending.length===0 && <div className="empty">All high-stakes marked.</div>}
+          {pending.map((m)=>{ const open = markOpen&&markOpen.id===m.id; return (
+            <div className="queue-item" key={m.id}>
+              <div className="qi-head"><span className="qi-who">{m.name}</span><span className="qi-q">{m.q}</span></div>
+              {!open ? <button className="qi-btn" onClick={()=>{setMarkOpen({code:m.code,id:m.id});setPick(null);}}>Mark</button> : (<React.Fragment>
+                <div className="qi-pred">Predicted {m.predicted} · balance {m.bal.p}/{m.bal.b}/{m.bal.y}</div>
+                <div className="levels">{LEVELS.map((lv)=>(<button key={lv.l} className={"lvl " + (pick===lv.l?"on":"")} onClick={()=>setPick(lv.l)}><span className="lvl-l">{lv.l}</span><span className="lvl-m">{lv.m}</span></button>))}</div>
+                <button className="save" onClick={award} disabled={!pick}>Save — moves their rings</button>
+              </React.Fragment>)}
+            </div>
+          );})}
+        </section>
+
+        <section className="lane own"><div className="lane-h"><span className="lane-tag" style={{background:BLUE.hi,color:BLUE.txt}}>Your own testing</span><span className="lane-w">enter it</span></div>
+          <div className="field"><label>Student</label><div className="chips">{s.students.map((x)=>(<button key={x.code} className={"chip " + (oStu===x.code?"on":"")} onClick={()=>setOStu(x.code)}>{x.name}</button>))}</div></div>
+          <div className="field"><label>Assessment</label><input value={oName} onChange={(e)=>setOName(e.target.value)} placeholder="e.g. Class test · attribution" /></div>
+          <div className="field"><label>Area</label><div className="chips">{AREAS.map((a)=>(<button key={a.key} className={"chip " + (oArea===a.key?"on":"")} onClick={()=>setOArea(a.key)}>{a.name}</button>))}</div></div>
+          <div className="field"><label>Score as</label><div className="seg"><button className={oMode==="level"?"on":""} onClick={()=>setOMode("level")}>Level</button><button className={oMode==="mark"?"on":""} onClick={()=>setOMode("mark")}>Raw mark</button></div></div>
+          {oMode==="level" ? <div className="chips lvls">{["L1","L2","L3","L4"].map((l)=>(<button key={l} className={"chip lv " + (oLevel===l?"on":"")} onClick={()=>setOLevel(l)}>{l}</button>))}</div>
+            : <div className="markrow"><input type="number" className="mnum" value={oMark} onChange={(e)=>setOMark(e.target.value)} placeholder="mark" /><span>out of</span><input type="number" className="mnum" value={oOut} onChange={(e)=>setOOut(e.target.value)} /></div>}
+          <button className="save" onClick={saveOwn} disabled={!oName.trim()||(oMode==="level"?!oLevel:oMark==="")}>Save mark — moves rings</button>
+          {s.own.length>0 && <div className="ownlog">{s.own.slice(0,4).map((e,i)=>(<div className="ol" key={i}><span>{e.code}</span><span>{e.name}</span><span>{e.score}</span></div>))}</div>}
+        </section>
+      </React.Fragment>)}
+    </div>
+  );
+}
+
+const CSS = `
+.cp-root{--paper:#EEF1F2;--card:#FFFFFF;--ink:#172029;--muted:#5F6E79;--line:#E3E7EA;--steel:#3E7CB1;
+  font-family:'Hanken Grotesk',system-ui,sans-serif;color:var(--ink);background:var(--paper);max-width:720px;margin:0 auto;padding:16px;-webkit-font-smoothing:antialiased;}
+.cp-root *{box-sizing:border-box;}.loading{padding:40px;text-align:center;color:#5F6E79;font-family:'Hanken Grotesk',system-ui,sans-serif;}
+.topbar{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);font-weight:600;margin-bottom:14px;}
+.crest{color:var(--ink);}.topbar .dot{width:3px;height:3px;border-radius:50%;background:var(--muted);}.topbar .spacer{flex:1;}
+.saved{color:#1C8C63;font-weight:700;font-size:12px;}
+.roles{display:flex;gap:3px;background:#E3E7EA;border-radius:9px;padding:3px;}
+.roles button{border:0;background:none;font-family:inherit;font-size:12.5px;font-weight:700;color:var(--muted);padding:5px 14px;border-radius:7px;cursor:pointer;}
+.roles button.on{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08);}
+.ring{position:relative;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+.ring-c{position:absolute;display:flex;flex-direction:column;align-items:center;line-height:1;}
+.ring-v{font-family:'Archivo Expanded',sans-serif;font-weight:800;font-size:17px;}.ring-s{font-size:9px;color:var(--muted);font-weight:600;margin-top:1px;}
+.hero{background:linear-gradient(135deg,#141C24,#1F2C36);color:#EDF1F3;border-radius:16px;padding:22px;margin-bottom:12px;}
+.hh-name{font-family:'Archivo Expanded',sans-serif;font-weight:800;font-size:15px;color:#8FA3B0;margin-bottom:4px;}
+.hh-line{font-size:18px;font-weight:500;}.hh-line .star{color:#7FD3AD;font-family:'Archivo Expanded',sans-serif;font-weight:800;}
+.gradebar{margin:18px 0 2px;}.gb-track{position:relative;height:12px;background:rgba(255,255,255,.12);border-radius:6px;}
+.gb-fill{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:linear-gradient(90deg,#3E7CB1,#5FA8D8);transition:width .6s;}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:12px;}
+.card-h{font-weight:700;font-size:15px;margin-bottom:14px;}
+.aob{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.aob-tag{font-family:'Archivo Expanded',sans-serif;font-weight:700;font-size:11px;padding:3px 8px;border-radius:5px;width:44px;text-align:center;}
+.aob-lab{font-size:12.5px;font-weight:600;color:var(--muted);width:82px;}
+.aob-bar{flex:1;height:9px;background:#EDF0F2;border-radius:5px;overflow:hidden;}.aob-bar div{height:100%;border-radius:5px;}
+.aob-v{font-family:'Archivo Expanded',sans-serif;font-weight:800;font-size:14px;width:24px;text-align:right;}
+.await{font-size:13px;color:var(--muted);background:#F7F9FA;border-radius:9px;padding:12px;}
+.mk-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;font-size:13.5px;}
+.mk-row strong{font-family:'Archivo Expanded',sans-serif;font-weight:800;font-size:16px;}
+.mk-row.hi{background:#FBEDB0;margin:0 -10px;padding:8px 10px;border-radius:8px;}
+.refl p{font-size:12.5px;margin:0 0 8px;}
+.refl textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:10px;font-family:inherit;font-size:13px;resize:vertical;}
+.refl textarea:focus{outline:none;border-color:var(--steel);}
+.refl button{margin-top:8px;border:0;background:var(--ink);color:#fff;font-family:inherit;font-size:12.5px;font-weight:700;padding:9px 16px;border-radius:8px;cursor:pointer;}
+.refl button:disabled{opacity:.4;}
+.refl-done{font-size:12.5px;line-height:1.5;background:#F1F6F4;border:1px solid #D3E4DC;border-radius:9px;padding:12px;color:#15694A;}
+.area-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px 8px;}
+@media(max-width:520px){.area-grid{grid-template-columns:repeat(3,1fr);}}
+.area{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;}
+.area-name{font-size:11px;font-weight:600;line-height:1.25;}
+.cls{background:#141C24;color:#EDF1F3;border-radius:14px;padding:18px;display:flex;align-items:center;gap:20px;margin-bottom:12px;}
+.cls-item{display:flex;flex-direction:column;align-items:center;gap:6px;}.cls-l{font-size:11px;color:#8FA3B0;font-weight:600;}
+.cls-stats{display:flex;flex:1;justify-content:space-around;}.cls-s{text-align:center;}
+.cls-s strong{display:block;font-family:'Archivo Expanded',sans-serif;font-weight:800;font-size:24px;}.cls-s span{font-size:11px;color:#8FA3B0;font-weight:600;}
+.reveal-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.reveal-bar span{font-size:12px;color:var(--muted);font-weight:600;}
+.reveal{border:1px solid var(--line);background:#fff;font-family:inherit;font-size:12px;font-weight:700;color:var(--muted);padding:6px 12px;border-radius:8px;cursor:pointer;}
+.reveal.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+.crow{display:flex;align-items:center;gap:14px;padding:11px 0;border-top:1px solid var(--line);}.crow:first-of-type{border-top:0;}
+.crow-b{flex:1;}.crow-id{font-size:13.5px;font-weight:700;}.crow-sub{font-size:12px;color:var(--muted);margin-top:1px;}
+.crow-state{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.lane{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:12px;}
+.lane.own{border-color:#CBE3F5;}
+.lane-h{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+.lane-tag{font-family:'Archivo Expanded',sans-serif;font-weight:700;font-size:11px;padding:4px 10px;border-radius:6px;}
+.lane-w{font-size:11.5px;color:var(--muted);font-weight:600;}
+.stream{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:12.5px;}
+.s-code{font-weight:700;}.s-piece{flex:1;color:var(--muted);}.s-res{font-family:'Archivo Expanded',sans-serif;font-weight:800;font-size:12px;}
+.empty{font-size:12.5px;color:var(--muted);}
+.queue-item{padding:10px 0;border-top:1px solid var(--line);}
+.qi-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+.qi-who{font-family:'Archivo Expanded',sans-serif;font-weight:800;font-size:13px;}.qi-q{font-size:12px;color:var(--muted);}
+.qi-btn{border:1.5px solid var(--ink);background:#fff;color:var(--ink);font-family:inherit;font-size:12.5px;font-weight:700;padding:8px 16px;border-radius:8px;cursor:pointer;}
+.qi-pred{font-size:12px;color:var(--muted);margin-bottom:10px;}
+.levels{display:flex;gap:8px;margin-bottom:12px;}
+.lvl{flex:1;border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:9px 4px;cursor:pointer;font-family:inherit;display:flex;flex-direction:column;align-items:center;gap:2px;}
+.lvl.on{border-color:var(--ink);background:#FBEDB0;}
+.lvl-l{font-family:'Archivo Expanded',sans-serif;font-weight:800;font-size:15px;}.lvl-m{font-size:11px;color:var(--muted);font-weight:700;}
+.save{width:100%;border:0;background:#1C8C63;color:#fff;font-family:inherit;font-size:13px;font-weight:700;padding:11px;border-radius:9px;cursor:pointer;}
+.save:disabled{opacity:.45;}
+.field{margin-bottom:12px;}.field label{display:block;font-size:11px;font-weight:700;color:var(--muted);margin-bottom:7px;}
+.chips{display:flex;flex-wrap:wrap;gap:6px;}
+.chip{font-size:12px;font-weight:600;color:var(--muted);background:#EDF0F2;border:0;border-radius:16px;padding:6px 12px;cursor:pointer;font-family:inherit;}
+.chip.on{background:var(--ink);color:#fff;}.chip.lv{width:50px;text-align:center;font-family:'Archivo Expanded',sans-serif;font-weight:800;}
+.lvls{margin-bottom:12px;}
+.field input,.markrow input{border:1px solid var(--line);border-radius:9px;padding:10px;font-family:inherit;font-size:14px;width:100%;}
+.field input:focus{outline:none;border-color:var(--steel);}
+.seg{display:inline-flex;background:#E3E7EA;border-radius:9px;padding:3px;}
+.seg button{border:0;background:none;font-family:inherit;font-size:12.5px;font-weight:700;color:var(--muted);padding:6px 16px;border-radius:7px;cursor:pointer;}
+.seg button.on{background:#fff;color:var(--ink);}
+.markrow{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:13px;color:var(--muted);}.mnum{width:80px;}
+.ownlog{margin-top:14px;}
+.ol{display:flex;justify-content:space-between;font-size:12px;padding:7px 0;border-top:1px solid var(--line);}
+.ol span:first-child{font-weight:700;}.ol span{color:var(--muted);}
+`;
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
